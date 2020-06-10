@@ -1,0 +1,26 @@
+{
+  "ExecServiceSettings": {
+	"DispatcherSettings": {
+	  "channel_count": 2,
+	  "channel_capacity": 2,
+	  "wait_for_chan_avail": true
+	},
+	"ExecPoolSettings": {
+	  "async_task_executor_count": 2,
+	  "blocking_task_executor_count": 1
+	},
+	"ExecutorSettings": {
+	  "task_queue_capacity": 2,
+	  "wait_for_availability": true
+	}
+  },
+  "LogSettings": {
+	"LogFileName": "./log/executor.log",
+	"MaxSizeInMb": 3,
+	"Backups": 5,
+	"AgeInDays": 7,
+	"Compress": false,
+	"LogOnConsole": true,
+	"DebugLog": true
+  }
+}

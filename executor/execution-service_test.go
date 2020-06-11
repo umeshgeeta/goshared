@@ -7,14 +7,32 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/umeshgeeta/goshared/util"
+	"os"
 	"testing"
+	"time"
 )
+
+var es *ExecutionService
+
+func TestMain(m *testing.M) {
+	SetupRand()
+	SetupTestTask()
+
+	// We use default configuration, including for logging
+	es = NewExecutionService("xxx", true)
+	// this is expected to initialize logging as well
+	util.SetConsoleLog(true)
+	util.Log(fmt.Sprintf("Config: %v\n", GlobalExecServiceCfg))
+
+	// start the execution service
+	es.Start()
+
+	// call flag.Parse() here if TestMain uses flags
+	os.Exit(m.Run())
+}
 
 func TestExecutorServiceFromDefaultCfg(t *testing.T) {
 	assert := assert.New(t)
-
-	es := NewExecutionService("xxx", true)
-	util.Log(fmt.Sprintf("Config: %v\n", GlobalExecServiceCfg))
 
 	dsp := es.taskDispatcher
 	assert.NotNil(dsp)
@@ -23,8 +41,51 @@ func TestExecutorServiceFromDefaultCfg(t *testing.T) {
 	assert.NotNil(ep)
 
 	assert.NotNil(ep.asyncExecutors)
-	assert.NotZero(len(ep.asyncExecutors))
+	acount := len(ep.asyncExecutors)
+	assert.NotZero(acount)
+	assert.Equal(acount, GlobalExecServiceCfg.ExexPool.AsyncTaskExecutorCount)
 
 	assert.NotNil(ep.blockingExecutors)
-	assert.NotZero(len(ep.blockingExecutors))
+	bcount := len(ep.blockingExecutors)
+	assert.NotZero(bcount)
+	assert.Equal(bcount, GlobalExecServiceCfg.ExexPool.BlockingTaskExecutorCount)
+
+	task1 := NewBlockingTestTask(30, true)
+	es.Submit(task1)
+	// Note - if you make the task time small, say 15 i.e. 15 microseconds,
+	// response of the task from executor comes faster than go routines
+	// - one for housekeeping and another the caller for blocking tasks -
+	// obtain Locks on mutex encapsulated by the 'waitingTask' in dispatcher.
+	// The mutex is used by the conditional variable.
+	task2 := NewBlockingTestTask(25, false)
+	es.Submit(task2)
+	//task3 := NewTestTask(200)
+	//es.Submit(task3)
+
+	inQueue := es.taskDispatcher.execPool.HowManyInQueue()
+	util.Log(fmt.Sprintf("Inqueue tasks: %d", inQueue))
+
+	time.Sleep(3 * time.Second)
+
+	waitTillNoJobsInExecution(es.Monitor)
+
+	util.Log(string(es.GetData().Data))
+
+}
+
+func TestExecutorServiceBasicSuccessCase(t *testing.T) {
+	t.SkipNow()
+	assert := assert.New(t)
+
+	taskDuration := 100
+	task11 := NewBlockingTestTask(taskDuration, true)
+	start := time.Now()
+	err, resp := es.Submit(task11)
+	end := time.Now()
+	assert.Nil(err)
+	assert.Equal(resp.Status, TaskStatusCompletedSuccessfully)
+
+	dur := (end.Nanosecond() - start.Nanosecond()) / 1000
+
+	assert.Greater(dur, taskDuration)
 }

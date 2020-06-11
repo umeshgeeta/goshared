@@ -23,6 +23,7 @@ package executor
 import (
 	"errors"
 	"fmt"
+	"github.com/umeshgeeta/goshared/util"
 	"sync"
 )
 
@@ -94,6 +95,7 @@ func (t *thread) run() {
 				// whether the task implementation may or many have set
 				resp.TaskId = tsk.GetId()
 				rspChan <- resp
+				util.LogDebug(fmt.Sprintf("Responded back for task %d", tsk.GetId()))
 			} else {
 				// Every task is expected to have a channel, at least for tjr house keeping.
 				// So regard this as an error condition. Since we do not have

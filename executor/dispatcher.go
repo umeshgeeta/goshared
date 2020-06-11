@@ -5,6 +5,8 @@ package executor
 
 import (
 	"errors"
+	"fmt"
+	"github.com/umeshgeeta/goshared/util"
 	"sync"
 )
 
@@ -16,6 +18,7 @@ type Dispatcher struct {
 	chanCount    int
 	waitForChan  bool
 	waitingTasks map[int]waitingTask
+	JobStats     *TaskStats
 }
 
 type DispatcherCfg struct {
@@ -57,6 +60,7 @@ func NewDispatcher(cfg DispatcherCfg, ep *ExecutorPool) *Dispatcher {
 	disp.execPool = ep
 	disp.waitForChan = cfg.WaitForChanAvail
 	disp.chanCount = cfg.ChannelCount
+	disp.JobStats = newTaskStats()
 	return &disp
 }
 
@@ -70,6 +74,10 @@ func (disp *Dispatcher) Submit(tsk Task) (error, *Response) {
 	var resp *Response = nil
 	if tsk != nil {
 		err, resp = disp.submitTask(tsk)
+		if err == nil {
+			// there is no error in submitting the job, we start counting
+			disp.JobStats.taskSubmitted(tsk.IsBlocking())
+		}
 	} else {
 		err = errors.New("invalid task")
 	}
@@ -78,28 +86,47 @@ func (disp *Dispatcher) Submit(tsk Task) (error, *Response) {
 
 type waitingTask struct {
 	sync.Mutex
-	taskResponse *Response
-	cond         *sync.Cond
+	cond             *sync.Cond
+	responseReceived bool
+	taskResponse     Response
+	blocking         bool // whether task for which we will be waiting, is it blocking or not
 }
 
-func addNewWaitingTask(disp *Dispatcher, chanIndex int, taskId int) *waitingTask {
-	r := waitingTask{}
-	r.cond = sync.NewCond(&r)
-	// we start a go routine which will be waiting on this condition
-	go func(wt waitingTask) {
-		wt.Lock()
-		for r.taskResponse == nil {
+func addNewWaitingTask(disp *Dispatcher, chanIndex int, tsk Task) *waitingTask {
+	r := new(waitingTask)
+	// track whether the task is blocking or not
+	r.blocking = tsk.IsBlocking()
+	r.cond = sync.NewCond(r)
+	// update the internal map
+	disp.waitingTasks[tsk.GetId()] = *r
+	util.LogDebug(fmt.Sprintf("WaitingTask %v for task (id=%d) created", r, tsk.GetId()))
+	// We start a go routine which will be waiting on this condition.
+	// It is guaranteed that the go routine spawned will not go into infinite
+	// loop because, the task is yet to be submitted. In other words, we do all
+	// the house keeping work like setting up the listener for the response
+	// before any response upon execution can be ever created.
+	go func(wt *waitingTask) {
+		for !wt.responseReceived {
+			wt.Lock()
+			util.LogDebug(fmt.Sprintf("Starting wait. waitingTask: %v", wt))
 			wt.cond.Wait()
+			wt.Unlock()
+			// read back from the map
+			var updatedWt waitingTask = disp.waitingTasks[tsk.GetId()]
+			wt = &updatedWt
+			util.LogDebug(fmt.Sprintf("wait done! waitingTask: %v", wt))
 		}
-		tr := r.taskResponse
+		util.LogDebug(fmt.Sprintf("Waiting done for cond %v", wt.cond))
+		// get hold of the response....
+		tr := wt.taskResponse
 		// next remove the map entry
 		delete(disp.waitingTasks, tr.TaskId)
 		// and finally we need to mark channel as available
 		disp.respChans.markAvailable(chanIndex)
-		wt.Unlock()
+		// as well as count the job done
+		disp.JobStats.taskDone(wt.blocking)
 	}(r)
-	disp.waitingTasks[taskId] = r
-	return &r
+	return r
 }
 
 func (disp *Dispatcher) submitTask(tsk Task) (error, *Response) {
@@ -112,8 +139,8 @@ func (disp *Dispatcher) submitTask(tsk Task) (error, *Response) {
 		// set in the task so executor can use
 		tsk.SetRespChan(ai)
 		// before submit task, create a listener to receive any response
-		nwt := addNewWaitingTask(disp, i, tsk.GetId())
-		// try submitting the task for the execution
+		nwt := addNewWaitingTask(disp, i, tsk)
+		// try submitting the task for the execution, we are waiting in nwt
 		err = disp.execPool.Submit(tsk)
 		// If no error, we have been able to submit successfully
 		// and go routine is started to undertake house keeping
@@ -126,7 +153,7 @@ func (disp *Dispatcher) submitTask(tsk Task) (error, *Response) {
 			// The way we achieve that is by setting a special error response
 			// so that the house keeping go routine which is waiting will
 			// exit and normal steps of house keeping will be executed.
-			nwt.taskResponse = FailedToSubmitResponse(tsk.GetId())
+			nwt.taskResponse = *FailedToSubmitResponse(tsk.GetId())
 		} else {
 			// else the task was submitted successfully with another go routine
 			// waiting to undertake house keeping when the execution response
@@ -136,13 +163,16 @@ func (disp *Dispatcher) submitTask(tsk Task) (error, *Response) {
 			// for the response from execution as well.
 			if tsk.IsBlocking() {
 				nwt.Lock()
-				for nwt.taskResponse == nil {
+				for !nwt.responseReceived {
 					nwt.cond.Wait()
+					nwt.Unlock()
+					// get the updated copy
+					var updatedWt waitingTask = disp.waitingTasks[tsk.GetId()]
+					nwt = &updatedWt
 				}
-				resp = nwt.taskResponse
+				resp = &nwt.taskResponse
 			}
 		}
-
 	} else {
 		err = errors.New("cannot submit, no channel available")
 	}
@@ -199,6 +229,9 @@ func (rc *responseChannels) start() {
 	for ch := range rc.responseChannels {
 		// We are starting 'listener go routines' for each of the channel
 		// which run in the infinite loop until we stop the dispatcher.
+		// The outer for loop is to start 'listener go routine' for each
+		// channel channels provided. Infinite for loop is inside the go
+		// routine where it keeps listening for various tasks over the lifetime.
 		// In the infinite loop, every time we get a response, we dig
 		// out the task id for which the response is received and then
 		// we access the associated waiting task entry for that task id
@@ -215,8 +248,13 @@ func (rc *responseChannels) start() {
 			for rc.continueRun {
 				var tr Response = <-rci
 				var wt = (*rc.waitingTasksInDispatcher)[tr.TaskId]
-				wt.taskResponse = &tr
+				wt.taskResponse = tr
+				wt.responseReceived = true
+				// update back in the map
+				(*rc.waitingTasksInDispatcher)[tr.TaskId] = wt
 				wt.cond.Broadcast()
+				util.LogDebug(fmt.Sprintf("Received response %v for taskId %d. Waiting task %v is signaled",
+					wt.taskResponse, tr.TaskId, wt))
 			}
 		}(rc.responseChannels[ch])
 	}

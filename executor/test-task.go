@@ -71,10 +71,14 @@ func SetupTestTask() {
 }
 
 func NewTestTask(ed int) *TestTask {
+	return NewBlockingTestTask(ed, GetRandomBoolean())
+}
+
+func NewBlockingTestTask(ed int, blocking bool) *TestTask {
 	tt := new(TestTask)
 	taskIdCounter = +nextTaskId()
 	tt.id = taskIdCounter
-	tt.blocking = GetRandomBoolean()
+	tt.blocking = blocking
 	tt.execDuration = ed
 	return tt
 }

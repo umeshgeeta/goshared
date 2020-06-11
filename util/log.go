@@ -78,6 +78,8 @@ func InitializeLog(fn string, ms int, bk int, age int, compress bool) {
 func SetLoggingCfg(ls *LoggingCfg) {
 	if ls != nil {
 		InitializeLog(ls.LogFileName, ls.MaxSizeInMb, ls.Backups, ls.AgeInDays, ls.Compress)
+		GlobalLogSettings.DebugLog = ls.DebugLog
+		GlobalLogSettings.LogOnConsole = ls.LogOnConsole
 	} else {
 		log.Fatal("Logging configuration is nil")
 	}
@@ -121,7 +123,7 @@ func SetConsoleLog(val bool) {
 }
 
 // Enable or disable debug logging.
-func SetDeubgLog(val bool) {
+func SetDebugLog(val bool) {
 	GlobalLogSettings.DebugLog = val
 }
 

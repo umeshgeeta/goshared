@@ -13,6 +13,7 @@ import (
 
 type ExecutionService struct {
 	taskDispatcher *Dispatcher
+	Monitor        *util.Monitor // exposed for testing purposes
 }
 
 // Configuration for the entire execution service which comprises of
@@ -21,6 +22,12 @@ type ExecServiceCfg struct {
 	Dispatcher DispatcherCfg `json:"DispatcherSettings"`
 	ExexPool   ExecPoolCfg   `json:"ExecPoolSettings"`
 	Executor   ExecCfg       `json:"ExecutorSettings"`
+	Monitoring MonitoringCfg `json:"MonitoringSettings"`
+}
+
+type MonitoringCfg struct {
+	MonitoringFrequency int `json:"MonitoringFrequency"`
+	MonDataChanBufSz    int `json:"ChannelBufferSize"`
 }
 
 // Name of the Json element in any Json Configuration file which contains
@@ -100,13 +107,20 @@ func NewExecutionService(cfgFileName string, useDefault bool) *ExecutionService 
 
 	es := new(ExecutionService)
 	es.taskDispatcher = NewDispatcher(GlobalExecServiceCfg.Dispatcher,
-		NewExecutorPool(GlobalExecServiceCfg.ExexPool, GlobalExecServiceCfg.Executor))
+		NewExecutorPool(GlobalExecServiceCfg.ExexPool,
+			GlobalExecServiceCfg.Executor))
 	util.Log(fmt.Sprintf("Started ExecutorService %v", es))
+
+	// start monitoring service
+	es.Monitor, _ = util.NewMonitor(GlobalExecServiceCfg.Monitoring.MonitoringFrequency,
+		GlobalExecServiceCfg.Monitoring.MonDataChanBufSz,
+		*es)
 	return es
 }
 
 func (es *ExecutionService) Start() {
 	es.taskDispatcher.Start()
+	es.Monitor.Start()
 }
 
 func (es *ExecutionService) Submit(tsk Task) (error, *Response) {
@@ -115,4 +129,13 @@ func (es *ExecutionService) Submit(tsk Task) (error, *Response) {
 
 func (es *ExecutionService) Stop() {
 	es.taskDispatcher.Stop()
+	es.Monitor.Stop()
+}
+
+func (es ExecutionService) GetData() util.Blob {
+	return *(util.NewBlob(es.taskDispatcher.JobStats.byteArray()))
+}
+
+func (es ExecutionService) Name() string {
+	return "ExecutionService"
 }

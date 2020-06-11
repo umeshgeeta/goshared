@@ -23,7 +23,7 @@ func TestLog(t *testing.T) {
 
 	SetConsoleLog(true)
 	Log("Started log")
-	SetDeubgLog(true)
+	SetDebugLog(true)
 	LogDebug("Debug log should come up as well")
 	Log("End log")
 

@@ -12,11 +12,15 @@
 	"ExecutorSettings": {
 	  "task_queue_capacity": 2,
 	  "wait_for_availability": true
+	},
+	"MonitoringSettings" : {
+	  "MonitoringFrequency": 2,
+	  "ChannelBufferSize": 5
 	}
   },
   "LogSettings": {
 	"LogFileName": "./log/executor.log",
-	"MaxSizeInMb": 3,
+	"MaxSizeInMb": 1,
 	"Backups": 5,
 	"AgeInDays": 7,
 	"Compress": false,

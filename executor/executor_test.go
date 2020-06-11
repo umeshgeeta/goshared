@@ -6,18 +6,9 @@ package executor
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"os"
 	"sync"
 	"testing"
 )
-
-func TestMain(m *testing.M) {
-	SetupRand()
-	SetupTestTask()
-
-	// call flag.Parse() here if TestMain uses flags
-	os.Exit(m.Run())
-}
 
 func TestExecutorFailSubmission(t *testing.T) {
 	//t.SkipNow()

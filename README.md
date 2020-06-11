@@ -15,7 +15,7 @@ Feel free to reach out to me (umesh409@yahoo.com) for:
 - how to use the code mentioned here, or
 - if you need any additional functionality in the current code. I will try my best to have it included.
 
-Code is under MIT License, so it is least restrictive. (Please stick to 'master' branch which has working code while code in 'dev' branch is still under development and not ready for consumption.)
+Code is under MIT License, so it is least restrictive. (Please stick to 'master' branch which has working code while code in other branches is still under development and not ready for consumption.)
 
 Have a look and enjoy! 
 

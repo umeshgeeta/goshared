@@ -85,8 +85,7 @@ func (disp *Dispatcher) Submit(tsk Task) (error, *Response) {
 }
 
 type waitingTask struct {
-	sync.Mutex
-	cond             *sync.Cond
+	cond             *util.CondVar
 	responseReceived bool
 	taskResponse     Response
 	blocking         bool // whether task for which we will be waiting, is it blocking or not
@@ -96,7 +95,7 @@ func addNewWaitingTask(disp *Dispatcher, chanIndex int, tsk Task) *waitingTask {
 	r := new(waitingTask)
 	// track whether the task is blocking or not
 	r.blocking = tsk.IsBlocking()
-	r.cond = sync.NewCond(r)
+	r.cond = util.NewCondVar(40, 1000)
 	// update the internal map
 	disp.waitingTasks[tsk.GetId()] = *r
 	util.LogDebug(fmt.Sprintf("WaitingTask %v for task (id=%d) created", r, tsk.GetId()))
@@ -107,10 +106,8 @@ func addNewWaitingTask(disp *Dispatcher, chanIndex int, tsk Task) *waitingTask {
 	// before any response upon execution can be ever created.
 	go func(wt *waitingTask) {
 		for !wt.responseReceived {
-			wt.Lock()
 			util.LogDebug(fmt.Sprintf("Starting wait. waitingTask: %v", wt))
 			wt.cond.Wait()
-			wt.Unlock()
 			// read back from the map
 			var updatedWt waitingTask = disp.waitingTasks[tsk.GetId()]
 			wt = &updatedWt
@@ -162,10 +159,8 @@ func (disp *Dispatcher) submitTask(tsk Task) (error, *Response) {
 			// However if this is a blocking task, we need to wait here
 			// for the response from execution as well.
 			if tsk.IsBlocking() {
-				nwt.Lock()
 				for !nwt.responseReceived {
 					nwt.cond.Wait()
-					nwt.Unlock()
 					// get the updated copy
 					var updatedWt waitingTask = disp.waitingTasks[tsk.GetId()]
 					nwt = &updatedWt
@@ -252,7 +247,11 @@ func (rc *responseChannels) start() {
 				wt.responseReceived = true
 				// update back in the map
 				(*rc.waitingTasksInDispatcher)[tr.TaskId] = wt
-				wt.cond.Broadcast()
+				if wt.blocking {
+					wt.cond.Broadcast(2)
+				} else {
+					wt.cond.Broadcast(1)
+				}
 				util.LogDebug(fmt.Sprintf("Received response %v for taskId %d. Waiting task %v is signaled",
 					wt.taskResponse, tr.TaskId, wt))
 			}

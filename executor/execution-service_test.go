@@ -57,7 +57,7 @@ func TestExecutorServiceFromDefaultCfg(t *testing.T) {
 	// - one for housekeeping and another the caller for blocking tasks -
 	// obtain Locks on mutex encapsulated by the 'waitingTask' in dispatcher.
 	// The mutex is used by the conditional variable.
-	task2 := NewBlockingTestTask(25, false)
+	task2 := NewBlockingTestTask(600, false)
 	es.Submit(task2)
 	//task3 := NewTestTask(200)
 	//es.Submit(task3)

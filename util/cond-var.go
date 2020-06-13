@@ -71,13 +71,16 @@ func (cv *CondVar) Wait() {
 	cv.Lock()
 	cv.cond.Wait()
 	cv.howManyLeft--
+	//LogDebug(fmt.Sprintf("howManyLeft: %d", cv.howManyLeft))
 	cv.Unlock()
 }
+
+const errMsgBdincomplete = "earlier broadcast not complete"
 
 // Broadcast with how many 'receipts' from waiters are expected.
 func (cv *CondVar) Broadcast(r int) error {
 	if cv.howManyLeft > 0 {
-		return errors.New("earlier broadcast not complete")
+		return errors.New(errMsgBdincomplete)
 	}
 	cv.Lock()
 	cv.howManyLeft = r

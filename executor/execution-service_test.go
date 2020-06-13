@@ -74,7 +74,7 @@ func TestExecutorServiceFromDefaultCfg(t *testing.T) {
 }
 
 func TestExecutorServiceBasicSuccessCase(t *testing.T) {
-	t.SkipNow()
+	//t.SkipNow()
 	assert := assert.New(t)
 
 	taskDuration := 100
@@ -82,7 +82,7 @@ func TestExecutorServiceBasicSuccessCase(t *testing.T) {
 	start := time.Now()
 	err, resp := es.Submit(task11)
 	end := time.Now()
-	assert.Nil(err)
+	assert.Nil(err) // no error expected in submission
 	assert.Equal(resp.Status, TaskStatusCompletedSuccessfully)
 
 	dur := (end.Nanosecond() - start.Nanosecond()) / 1000

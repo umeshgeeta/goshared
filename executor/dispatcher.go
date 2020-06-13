@@ -95,7 +95,7 @@ func addNewWaitingTask(disp *Dispatcher, chanIndex int, tsk Task) *waitingTask {
 	r := new(waitingTask)
 	// track whether the task is blocking or not
 	r.blocking = tsk.IsBlocking()
-	r.cond = util.NewCondVar(40, 1000)
+	r.cond = util.NewCondVar(10, 100)
 	// update the internal map
 	disp.waitingTasks[tsk.GetId()] = *r
 	util.LogDebug(fmt.Sprintf("WaitingTask %v for task (id=%d) created", r, tsk.GetId()))
@@ -198,7 +198,7 @@ type responseChannels struct {
 	firstAvailable           int
 	channelCount             int
 	mux                      sync.Mutex
-	chanAvail                *sync.Cond
+	chanAvail                *util.CondVar
 	waitForChannel           bool
 	continueRun              bool
 	waitingTasksInDispatcher *map[int]waitingTask
@@ -214,7 +214,7 @@ func newRC(cc int, cp int, wfc bool, wtid *map[int]waitingTask) *responseChannel
 	rc.channelCount = cc
 	rc.waitForChannel = wfc
 	rc.firstAvailable = 0
-	rc.chanAvail = sync.NewCond(&rc.mux)
+	rc.chanAvail = util.NewCondVar(10, 100)
 	rc.waitingTasksInDispatcher = wtid
 	return &rc
 }
@@ -248,8 +248,10 @@ func (rc *responseChannels) start() {
 				// update back in the map
 				(*rc.waitingTasksInDispatcher)[tr.TaskId] = wt
 				if wt.blocking {
+					// it is house keeping routine + the original caller
 					wt.cond.Broadcast(2)
 				} else {
+					// it is house keeping routine only
 					wt.cond.Broadcast(1)
 				}
 				util.LogDebug(fmt.Sprintf("Received response %v for taskId %d. Waiting task %v is signaled",
@@ -271,7 +273,9 @@ func (rc *responseChannels) markAvailable(ai int) {
 	if rc.tasksWaitingOnChn[ai] > 0 {
 		rc.tasksWaitingOnChn[ai]--
 	} else {
-		rc.tasksWaitingOnChn[ai] = 0
+		// it is actually an error condition, there is a defect lying here
+		// let us log for now to find more
+		util.Log("unexpected - marking a channel available which is already free")
 	}
 	if rc.firstAvailable == -1 {
 		rc.firstAvailable = ai
@@ -284,7 +288,6 @@ func (rc *responseChannels) markAvailable(ai int) {
 func (rc *responseChannels) nextAvailChanIndex() (int, chan Response) {
 	var result chan Response = nil
 	var avlIndex = -1
-	rc.mux.Lock()
 	avlIndex = rc.firstAvailable
 	if avlIndex > -1 {
 		result = rc.pickFromAvailChannels(avlIndex)
@@ -294,12 +297,11 @@ func (rc *responseChannels) nextAvailChanIndex() (int, chan Response) {
 		}
 		// else we did not find a channel and we are not going to wait; so should return
 	}
-	rc.mux.Unlock()
 	return avlIndex, result
 }
 
 func (rc *responseChannels) waitForAChannel(avl int) (int, chan Response) {
-	rc.mux.Lock()
+
 	var avlIndex = avl
 	for avlIndex == -1 {
 		rc.chanAvail.Wait()
@@ -307,13 +309,14 @@ func (rc *responseChannels) waitForAChannel(avl int) (int, chan Response) {
 	}
 	var result chan Response = nil
 	result = rc.pickFromAvailChannels(avlIndex)
-	rc.mux.Unlock()
 	return avlIndex, result
 }
 
 func (rc *responseChannels) pickFromAvailChannels(avlIndex int) chan Response {
 	// caller has the lock, so we do not worry about it
 	var result chan Response = nil
+	rc.mux.Lock()
+	defer rc.mux.Unlock()
 	result = rc.responseChannels[avlIndex]
 	i := rc.next(avlIndex)
 	min := rc.tasksWaitingOnChn[i]
@@ -327,6 +330,7 @@ func (rc *responseChannels) pickFromAvailChannels(avlIndex int) chan Response {
 		} else {
 			if nt < cap && nt < min {
 				minIndex = i
+				min = nt
 			}
 		}
 		i = rc.next(i)

@@ -6,9 +6,7 @@ This repository contains various go packages which any developer can import and 
 
 2) executor package is bit ambitious. I come from Java Object Oriented Serverside coding background. Like most programmers, there are many things I like about Java and I miss those anytime I pickup to learn a new programming language. Java scheduler and thread pool executor framework is one such feature I like in Java. In this package I am working on developing a similar mechanism. As per experts, Go Lang has strong Concurrency Support. But it's philosophy is to remain 'bare metal'. Besides it is a young language compared to Java. I needed 'executor type functionality' in another of my copy-right protected project. I am sure Go Community would have many solid packages to address this need. But I wanted to take it as an exercise so as I understand Go Lang Concurrency as well as develop a building block exactly what I needed in another copy-right protected project. Hence the efforts.
 
-Package 'executor' is not ready for consumption yet. I am in the process of implementing various tests to validate the functionality as intended. Design is fairly clear. I will update as soon as it is ready for the consumption.
-
-
+Current status of this package - I have completed basic coding and few unit tests. Next is to add few longer duration tests and start using it in my production project to flush out any obivious defects.
 
 Feel free to reach out to me (umesh409@yahoo.com) for:
 

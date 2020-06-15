@@ -15,3 +15,18 @@ func waitTillNoJobsInExecution(montior *util.Monitor) {
 		}
 	}
 }
+
+func createExecServiceWithTestCommonCfg(es *ExecutionService) *ExecutionService {
+	cfg := createCommonTestCfg(es)
+	return cfg.MakeExecServiceFromCfg()
+}
+
+func createCommonTestCfg(es *ExecutionService) *ExecServiceCfg {
+	cfg := es.CloneCfg()
+	cfg.Dispatcher.ChannelCount = 1
+	cfg.Dispatcher.ChannelCapacity = 1
+	cfg.ExexPool.AsyncTaskExecutorCount = 1
+	cfg.ExexPool.BlockingTaskExecutorCount = 1
+	cfg.Executor.TaskQueueCapacity = 1
+	return cfg
+}

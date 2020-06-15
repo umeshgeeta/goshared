@@ -64,7 +64,11 @@ type ExecCfg struct {
 // the Stop method. All submitted tasks are funneled through a channel so
 // 'waiting' for a task happens naturally.
 type thread struct {
-	continueRun         bool
+	continueRun bool
+
+	// Current design choice is one channel per thread. We could change it
+	// to use only 2 channels shared among all executors, one for blocking
+	// and another for non-blocking tasks.
 	taskQueue           chan Task // incoming tasks on a channel
 	queueCapacity       int
 	waitForAvailability bool

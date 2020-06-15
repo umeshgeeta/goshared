@@ -22,7 +22,8 @@ func TestMain(m *testing.M) {
 	es = NewExecutionService("xxx", true)
 	// this is expected to initialize logging as well
 	util.SetConsoleLog(true)
-	util.Log(fmt.Sprintf("Config: %v\n", GlobalExecServiceCfg))
+	util.Log(fmt.Sprintf("Config: %v\n", es.
+		ServiceCfgInUse))
 
 	// start the execution service
 	es.Start()
@@ -32,6 +33,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestExecutorServiceFromDefaultCfg(t *testing.T) {
+	//t.SkipNow()
 	assert := assert.New(t)
 
 	dsp := es.taskDispatcher
@@ -43,12 +45,12 @@ func TestExecutorServiceFromDefaultCfg(t *testing.T) {
 	assert.NotNil(ep.asyncExecutors)
 	acount := len(ep.asyncExecutors)
 	assert.NotZero(acount)
-	assert.Equal(acount, GlobalExecServiceCfg.ExexPool.AsyncTaskExecutorCount)
+	assert.Equal(acount, es.ServiceCfgInUse.ExexPool.AsyncTaskExecutorCount)
 
 	assert.NotNil(ep.blockingExecutors)
 	bcount := len(ep.blockingExecutors)
 	assert.NotZero(bcount)
-	assert.Equal(bcount, GlobalExecServiceCfg.ExexPool.BlockingTaskExecutorCount)
+	assert.Equal(bcount, es.ServiceCfgInUse.ExexPool.BlockingTaskExecutorCount)
 
 	task1 := NewBlockingTestTask(30, true)
 	es.Submit(task1)
@@ -88,4 +90,20 @@ func TestExecutorServiceBasicSuccessCase(t *testing.T) {
 	dur := (end.Nanosecond() - start.Nanosecond()) / 1000
 
 	assert.Greater(dur, taskDuration)
+}
+
+func TestExecutionServiceSubmissionFailure(t *testing.T) {
+	assert := assert.New(t)
+	cfg := createCommonTestCfg(es)
+	cfg.Dispatcher.WaitForChanAvail = false
+	testEs := cfg.MakeExecServiceFromCfg()
+	testEs.Start()
+
+	task1 := NewBlockingTestTask(3000, false)
+	testEs.Submit(task1)
+	task2 := NewBlockingTestTask(300, false)
+	testEs.Submit(task2)
+	err, _ := testEs.Submit(task2)
+	// we should get error here
+	assert.Errorf(err, "")
 }

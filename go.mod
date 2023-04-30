@@ -6,6 +6,7 @@ require (
 	github.com/gobuffalo/packr/v2 v2.8.3
 	github.com/ilyakaznacheev/cleanenv v1.4.2
 	github.com/jinzhu/copier v0.3.5
+	github.com/pkg/errors v0.8.1
 	github.com/stretchr/testify v1.8.2
 	github.com/umeshgeeta/goshared v0.0.2
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1

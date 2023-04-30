@@ -1,4 +1,4 @@
-module goshared
+module github.com/umeshgeeta/goshared
 
 go 1.20
 
